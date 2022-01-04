@@ -1,0 +1,261 @@
+---
+title: Investigation of Co-purchase Pattern and Reflected Social Roles in Amazon Co-Purchase
+  Network
+author: "Emma Wu, SOCI 421, McGill University"
+date: "2021/12/21"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: null
+header-includes: \usepackage{setspace}\doublespacing
+---
+<style type="text/css">
+  body{
+  font-size: 12pt;
+}
+</style>
+<div style="line-height:2em;">
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# load the 'igraph' package
+library(igraph)
+library(data.table)
+library(ggbiplot)
+library(graphics)
+library(stats)
+```
+# Background
+
+  As from the beginning of 21st century, Artificial Intelligence (AI) has been getting more and more involved in consumer's online shopping experience. Almost all mainstream e-commerce platforms have more or less adopted AI as key to success to help with consumer preference calculation. According to a report from MacKenzie et al. (2013), by 2013, 35% of Amazon's total sales is driven by its recommendation engine. The success of these AI-driven recommendation engines imply a social fact that purchase behavior of a consumer is never simply a random event. 
+
+  Individuals with certain social roles, coming from one's gender, class, social status, ethnicity etc., are expected by the society to act in a certain way, and thus tend to have certain co-purchase behavior. This is one of the assumptions the AI algorithms are built upon. Consumers with similar social roles tend to have similar co-purchase behaviors. Study the aggregate co-purchase patterns of consumers is an effective way to study social structure and social roles in the field of sociology. This project is a pilot project, with the purpose of investigating the co-purchase patterns hidden beneath Amazon online purchase records, and revealing potential social roles reflected by these patterns. 
+
+  I expect to see some clusters occur in the purchase network, with each cluster representing consumers purchase from some certain categories. And I expect them to be able to reflect certain social roles and positions in social structure. For example, gender division within family might correspond to men and women as two different social roles. Women are expected by the society to be taking more care of the children and and cooking parts of households, and also spending more money on beauty product and clothing; while social role of men is to take charge of the fixing and maintenance part of households, and maybe spend more money on digital products or video games. I expect to see patterns like these being reflected as cluster's co-purchase pattern. Even though I cannot make perfect judgement of what exact social role a pattern correspond to, due to lack of social labels for consumer in the data set, hopefully this project can still reveal some promising match between the co-purchase patterns and some well-studied social roles in the field.
+
+# Data
+
+The dataset in this project is the Amazon Review Data provided by Jianmo Ni (2018). The data includes reviews from May 1996 to Oct 2018, offered as per-category format. Instead of the whole dataset, I only take a 5-core subset that contains only reviewer and items with at least 5 reviews. Taking this subset helps to exclude the reviewers and items that cannot reflect purchase pattern due to not having enough records and hence be jsut noises and greatly reduces the amount of data to process. Moreover, I choose a "small" subset that is designed for classroom setting, with per category data size ranging approximately between 5 thousand to 5 million.
+  
+Further reduction has been done to the dataset. On one hand, I remove the items from categories that cannot themselves represent a specific cultural object, category `gift cards`, `Kindle store`, `magazine subscriptions` for example, given there are too many sub-categories within that represent very distinctive and different cultural preference. I remove categories that does not reflect continuous purchase pattern, category `appliances` for example. There are some combinations I do for categories that are similar. For example, I combine category `Amazon fashion` with category `clothing shoes and jewelry` together as a new category `clothing`. There are 17 categories being finally selected. They and their corresponding categories in the raw dataset are presented in Table 1.
+<center>
+![Table 1](images/table_1.png)
+</center>
+  
+Reduction in terms of depth is also made. This project does not care about the content of the review, nor the rating. Per review, only the reviewer ID and the ID of the item are retrieved. That is, my focus is only on who buys what item in which category. Category will be assigned to items as attributes after loading data into R.
+  
+The original dataset is provided in per category json files. Hence, a python script is used to convert json file per category to two csv files representing the nodes and edges. The project uses a Bash script to finish all conversion in a line. The Bash script simply runs the Python script on each category.
+  
+```{r load_data, include=FALSE}
+#Loading in all the csv files as data.table
+#Bind Similar categories
+
+amazon_fashion_edg <- fread("data_csv/amazon_fashion_edges.csv")
+amazon_fashion_edg <- amazon_fashion_edg[,!"product_id"]
+clothing_shoes_edg <- fread("data_csv/clothing_shoes_and_jewelry_edges.csv")
+clothing_shoes_edg <- clothing_shoes_edg[,!"product_id"]
+clothing_edg <- rbind(amazon_fashion_edg, clothing_shoes_edg)
+clothing <- data.table(aggregate(list(clothing=rep(1,nrow(clothing_edg))), clothing_edg, length))
+
+all_beauty_edg <- fread("data_csv/all_beauty_edges.csv")
+all_beauty_edg <- all_beauty_edg[,!"product_id"]
+luxury_beauty_edg <- fread("data_csv/luxury_beauty_edges.csv")
+luxury_beauty_edg <- luxury_beauty_edg[,!"product_id"]
+cosmetics_edg <- rbind(all_beauty_edg, luxury_beauty_edg)
+cosmetics<- data.table(aggregate(list(cosmetics=rep(1,nrow(cosmetics_edg))), cosmetics_edg, length))
+
+arts_crafts_edg <- fread("data_csv/arts_crafts_and_sewing_edges.csv")
+arts_crafts_edg <- arts_crafts_edg[,!"product_id"]
+arts_crafts<- data.table(aggregate(list(arts_crafts_and_sewing=rep(1,nrow(arts_crafts_edg))), arts_crafts_edg, length))
+
+automotive_edg <- fread("data_csv/automotive_edges.csv")
+automotive_edg<- automotive_edg[,!"product_id"]
+automotive<-data.table(aggregate(list(automotive =rep(1,nrow(automotive_edg))), automotive_edg, length))
+
+cds_edg <- fread("data_csv/cds_and_vinyl_edges.csv")
+cds_edg<- cds_edg[,!"product_id"]
+cds_and_vinyl<- data.table(aggregate(list(cds_and_vinyl =rep(1,nrow(cds_edg))), cds_edg, length))
+
+cell_phones_edg <- fread("data_csv/cell_phones_and_accessories_edges.csv")
+cell_phones_edg<- cell_phones_edg[,!"product_id"]
+electronics_edg <- fread("data_csv/electronics_edges.csv")
+electronics_edg <- electronics_edg[,!"product_id"]
+electronics_edg <- rbind(cell_phones_edg, electronics_edg)
+electronics <- data.table(aggregate(list(electronics=rep(1,nrow(electronics_edg))), electronics_edg, length))
+
+digital_music_edg <- fread("data_csv/digital_music_edges.csv")
+digital_music_edg <- digital_music_edg[,!"product_id"]
+digital_music<- data.table(aggregate(list(digital_music =rep(1,nrow(digital_music_edg))), digital_music_edg, length))
+
+grocery_edg <- fread("data_csv/grocery_and_gourmet_food_edges.csv")
+grocery_edg<- grocery_edg[,!"product_id"]
+prime_pantry_edg <- fread("data_csv/prime_pantry_edges.csv")
+prime_pantry_edg<-prime_pantry_edg[,!"product_id"]
+grocery_edg <- rbind(grocery_edg, prime_pantry_edg)
+grocery <- data.table(aggregate(list(grocery =rep(1,nrow(grocery_edg))), grocery_edg, length))
+
+home_and_kitchen_edg <- fread("data_csv/home_and_kitchen_edges.csv")
+home_and_kitchen_edg<- home_and_kitchen_edg[,!"product_id"]
+home_and_kitchen<- data.table(aggregate(list(home_and_kitchen = rep(1,nrow(home_and_kitchen_edg))), home_and_kitchen_edg, length))
+
+musical_instrument_edg <- fread("data_csv/musical_instruments_edges.csv")
+musical_instrument_edg<- musical_instrument_edg[,!"product_id"]
+musical_instrument<-data.table(aggregate(list(musical_instrument =rep(1,nrow(musical_instrument_edg))), musical_instrument_edg, length))
+
+patio_lawn_and_garden_edg <- fread("data_csv/patio_lawn_and_garden_edges.csv")
+patio_lawn_and_garden_edg<- patio_lawn_and_garden_edg[,!"product_id"]
+patio_lawn_and_garden<- data.table(aggregate(list(patio_lawn_and_garden =rep(1,nrow(patio_lawn_and_garden_edg))), patio_lawn_and_garden_edg, length))
+
+sports_and_outdoors_edg <- fread("data_csv/sports_and_outdoors_edges.csv")
+sports_and_outdoors_edg<- sports_and_outdoors_edg[,!"product_id"]
+sports_and_outdoors<- data.table(aggregate(list(sports_and_outdoors=rep(1,nrow(sports_and_outdoors_edg))), sports_and_outdoors_edg, length))
+
+tools_and_home_improvement_edg <- fread("data_csv/tools_and_home_improvement_edges.csv")
+tools_and_home_improvement_edg<- tools_and_home_improvement_edg[,!"product_id"]
+tools_and_home_improvement<- data.table(aggregate(list(tools_and_home_improvement=rep(1,nrow(tools_and_home_improvement_edg))), tools_and_home_improvement_edg, length))
+
+toys_and_games_edg <- fread("data_csv/toys_and_games_edges.csv")
+toys_and_games_edg<- toys_and_games_edg[,!"product_id"]
+toys_and_games<- data.table(aggregate(list(toys_and_games =rep(1,nrow(toys_and_games_edg))), toys_and_games_edg, length))
+
+video_games_edg <- fread("data_csv/video_games_edges.csv")
+video_games_edg<- video_games_edg[,!"product_id"]
+video_games<- data.table(aggregate(list(video_games =rep(1,nrow(video_games_edg))), video_games_edg, length))
+
+pet_supplies_edg <- fread("data_csv/pet_supplies_edges.csv")
+pet_supplies_edg<- pet_supplies_edg[,!"product_id"]
+pet_supplies<- data.table(aggregate(list(pet_supplies =rep(1,nrow(pet_supplies_edg))), pet_supplies_edg, length))
+
+software_edg <- fread("data_csv/software_edges.csv")
+software_edg<- software_edg[,!"product_id"]
+software<- data.table(aggregate(list(software =rep(1,nrow(software_edg))), software_edg, length))
+
+musical_instrument_edg <- fread("data_csv/musical_instruments_edges.csv")
+musical_instrument_edg<- musical_instrument_edg[,!"product_id"]
+musical_instrument<- data.table(aggregate(list(musical_instrument =rep(1,nrow(musical_instrument_edg))), musical_instrument_edg, length))
+
+patio_lawn_and_garden_edg <- fread("data_csv/patio_lawn_and_garden_edges.csv")
+patio_lawn_and_garden_edg<- patio_lawn_and_garden_edg[,!"product_id"]
+patio_lawn_and_garden<- data.table(aggregate(list(patio_lawn_and_garden =rep(1,nrow(patio_lawn_and_garden_edg))), patio_lawn_and_garden_edg, length))
+
+sports_and_outdoors_edg <- fread("data_csv/sports_and_outdoors_edges.csv")
+sports_and_outdoors_edg<- sports_and_outdoors_edg[,!"product_id"]
+sports_and_outdoors<- data.table(aggregate(list(sports_and_outdoors=rep(1,nrow(sports_and_outdoors_edg))), sports_and_outdoors_edg, length))
+
+tools_and_home_improvement_edg <- fread("data_csv/tools_and_home_improvement_edges.csv")
+tools_and_home_improvement_edg<- tools_and_home_improvement_edg[,!"product_id"]
+tools_and_home_improvement<- data.table(aggregate(list(tools_and_home_improvement=rep(1,nrow(tools_and_home_improvement_edg))), tools_and_home_improvement_edg, length))
+
+video_games_edg <- fread("data_csv/video_games_edges.csv")
+video_games_edg<- video_games_edg[,!"product_id"]
+video_games<- data.table(aggregate(list(video_games =rep(1,nrow(video_games_edg))), video_games_edg, length))
+
+pet_supplies_edg <- fread("data_csv/pet_supplies_edges.csv")
+pet_supplies_edg<- pet_supplies_edg[,!"product_id"]
+pet_supplies<- data.table(aggregate(list(pet_supplies =rep(1,nrow(pet_supplies_edg))), pet_supplies_edg, length))
+
+software_edg <- fread("data_csv/software_edges.csv")
+software_edg<- software_edg[,!"product_id"]
+software<-data.table( aggregate(list(software =rep(1,nrow(software_edg))), software_edg, length))
+
+toys_and_games_edg <- fread("data_csv/toys_and_games_edges.csv")
+toys_and_games_edg<- toys_and_games_edg[,!"product_id"]
+toys_and_games<- data.table(aggregate(list(toys_and_games =rep(1,nrow(toys_and_games_edg))), toys_and_games_edg, length))
+```
+
+# Methodology
+
+The major analysis are done with R language.
+
+## Data Structure
+The data structure used in this project is data.table in data.table is a data structure that is similar to data.frame, except for its capacity to speed up tabular data manipulation on large dataset. I choose data.table for this project because of the million level size of the dataset.
+
+## Principle Component Analysis
+The major data analysis method used in this project is Principle Component Analysis (PCA). As written by Jolliffie and Cadima (2016) in their paper, PCA is a technique to reduce the dimensionality of the interpreted dataset with minimum amount of information loss. The technique tries to solve the eigenvector/eigenvalue problem in order to find several principle components, which are uncorrelated new variables that maximize variance. Using these principle components, PCA performs a change of basis on the dataset, with the choice of using only the first few principle components and ignore the rest. Note that the principle components calculated from such analysis are the eigenvectors of covariance matrix of dataset. The principle components explains the major axis that explains most of the variance for the dataset. Hence, by doing PCA on our dataset, I will be able to get the principle components that drive customers to purchase commodities from certain categories. Reason about first few principle components with largest variance, I will be able to articulate the major division in the social structure that determines consumer's co-purchase pattern, and the social roles reflected by such major divisions.
+
+PCA instead of correspondence analysis is chosen for this project due to its ability to handle great number of quantitative variables, while correspondence analysis are more used to deal with categorical data. As a side note, multiple correspondence analysis(MCA) is a particular case of categorical PCA (CatPCA).
+
+PCA in R can be done either with correlation analysis or covariance analysis. The major difference is that correlation analysis involves an extra step of data normalization before PCA happens. It divides the variable value of a record by standard deviation of that variable, hence avoid variables to have drastically different range of data and put too much weight on variables with great range (too big/small value). In this project, I choose PCA be done with covariance analysis, because in my data preprocess step the dataset is filtered using a modified logarithm function that maps all original value to a non-negative value that won't be much greater than 2. Therefore, when start PCA, all variables already have very similar data range, and covariance analysis will be enough.
+
+# Analysis
+
+## Data pre-process
+
+Some data pre-process are done. From network data, I only take the edges and prune the item ID column, since all other information are not needed at current stage. Then I calculate the number of duplicates of a record as a new column, and then eliminate duplicates. After that, I outer-join all tables into one, with each row presenting a consumer and each column representing a category of commodity. Below is the first few lines of the table. Thereafter the data become quantitative.
+```{r echo=FALSE}
+category_list <- list(clothing, cosmetics, arts_crafts, automotive, cds_and_vinyl, digital_music, electronics, grocery, home_and_kitchen, musical_instrument, patio_lawn_and_garden, pet_supplies, software, sports_and_outdoors, tools_and_home_improvement, toys_and_games, video_games)
+merge_func <- function(...) merge(..., all = TRUE, by='reviewer_id')
+purchase_tbl  <- Reduce(merge_func, category_list)
+# Reduce the consumer that only purchase commodities from one category
+purchase_tbl <- purchase_tbl[rowSums(is.na(purchase_tbl))< 16,] 
+```
+
+A filter then is applied to the data. The filter maps all NA to 0, and maps all other entries with function log100(x) + 1, then round the number to 4 digits after the decimal point. The step intends to maximize the difference between 0 and 1, then minimize the differences between values that are greater than 1. That is, what matter the most important is if a consumer has consumed item from a certain category or not. The number of times the consumer has consumed an item from that category matters, because a larger number indicates a greater confidence of one's purchase habits, but it simply does not matter as much. Hence a logarithm with large base brings down any value greater than 1. The plus one term in the filter function avoids any negative number. Hence, the range of value after this step should be a non-negative value not much greater than 1.
+```{r echo=FALSE}
+RELU_shiftedLog <- function(x){
+  ifelse(is.na(x), 0, round(log(x, base = 100),digits = 4) + 1)
+}
+
+curve(expr=RELU_shiftedLog, from=1, to=50, , xlab="x", ylab="f(x)", main='Activation Function for Data Preprocess')
+
+# Add new filter
+purchase_tbl_log <- data.table(data.frame(lapply(purchase_tbl[,!"reviewer_id"], RELU_shiftedLog)))
+head(purchase_tbl_log, title='First few lines of data table after preprocess')
+```
+Below is the covariance matrix that will be used to do PCA. From this matrix we can already get some information about the general co-purchase pattern. Among all variables having positive covariance with `clothing`, the ones with largest covariance are `home and kichen`, `toys and games`, and `grocery`, indicating consumers who purchase clothing are those who tend to purchase groceries, kitchen supplies, and children cares. Among all variables having negative covariance with `clothing`, the ones with largest negative covariance are `patio lawn and garden` and `musical instrument`, indicating consumers with clothing purchase habit are very unlikely to have purchase habit of items from the above two categories. Using similar logic, we can discover some very interesting results from this covariance matrix: consumers of `video games` often are consumers of `electronics`, given the covariance of these two categories be 0.0225, which might due to these two categories fall into the similar field of hobbies. Consumers of `home and kichen` are often not consumers of `automotives` and `electronics`, which we can articulate as a possible result of either interest group or gender role.
+```{r echo=FALSE}
+# Covariance Matrix
+options(width = 200)
+cov(purchase_tbl_log)
+```
+## Principle Component Analysis
+I then do a PCA on the reprocessed data. Below is a table of proportion of variance on the first 10 principle components. Proportion of variance indicates the percentage of how much the principle components explain the variations in the dataset. The principle components are placed based on a descending order of their proportion of variance. Notice that after the 4th PC, the proportion of variance goes under 10%, hence I only take a look at the first 4 PC, which together can explain 55.4% variance of the dataset and ignore the rest. The first 4 components explain 20%, 13.4%, 11.9%, 10% of the variances, respectively.
+
+```{r echo=FALSE}
+copurchase.pca <- princomp(purchase_tbl_log)
+PoV <- copurchase.pca$sdev^2/sum(copurchase.pca$sdev^2)
+plot(PoV,type="b", main="Proportion of Variances of Principle Components", xlab = "PC#", xlim = c(1,10))
+sum <- summary(copurchase.pca, digits=0)
+sum
+```
+```{r echo=FALSE}
+# Rotation matrix
+#copurchase.pca$loadings
+```
+
+Let us first take a look at the visualization of first two components. Below are the variables after doing  basis rotation using the first two PCs. The first plot does not have data points but only showing variables for better visualization. PC1 is the x axis and PC2 is the Y axis. The graph together with the rotation matrix tells us that in PC1, consumers of `clothing`, `home and kitchen`, `toys and games`, `crafts and sewing`, `groceries`, `cosmetics`, `pet supplies` cluster in the positive direction of the x axis. The cluster that has exclusive and opposite co-purchase pattern gets together in the negative direction of x axis, which consist of consumers of `video game`, `music instrument`,`automotive`, `sports and outdoors`, etc. I argue PC1 could be a reflection of gender roles implied by the society. One potential correspondence is that in terms of household division, female often are expected to take more responsibility on routine works such as child caring, doing grocery and cooking; while men in household division often takes the part of maintenance and construction. Another potential correspondence I can see is the hobby part of gender roles: women care more about the appearance, such that they often spend more money on clothing and cosmetics products; men are expected to be more interested in sports and outdoor activities, cars, and digital entertainment such as playing video games or purchasing new-tech products. The above mentioned gender roles are well-known in both daily life and research field, and the expected behaviors can match well with the cluster we observe on PC1.
+
+As we can see from the graph, arrows pointed to opposite directions on PC2 are: positive direction we have consumers of `CDs and vinvls`, `digital music`, `music instrument`, `video games`, and negative directions we have `patio, lawn and garden`, `software`, `tools and home improvement`, `cosmetics`, `grocery`, `home and kitchen`, `cosmetics`, `pet supplies` etc. I suspects positive direction correspond to consumers of entertainment (these four categories on Amazon are all products of rather high price, especially the music-related ones), and negative direction correspond more to daily livelihood purchase. In this sense, PC2 might be a reflection of social roles defined by social status and economics. That is, consumers of entertainment CDs, music records, music instrument, videos games might be more of middle-upper class, while middle-lower class tend to spend most of the money just on livelihood instead of  high-cost entertainment. However, it is clear that the implication of PC2 is not as clear as the first component.  
+```{r echo=FALSE}
+ggbiplot(copurchase.pca,alpha=0, varname.adjust = 2, obs.scale = 2) + ggtitle("PC 1 and PC 2 of Amazon co-purchase pattern")+ theme_minimal()+theme(legend.position = "bottom")
+ggbiplot(copurchase.pca,alpha=1, varname.adjust = 2, obs.scale = 2) + ggtitle("Data distribution in PCA 1 and 2 of Amazon co-purchase pattern")+ theme(legend.position = "bottom")+ geom_point(aes(shape = "cross"), size = 0.01, stroke = 0, shape = ".")
+```
+Below are the plots for PC3 and PC4. Data transformed around these two dimensions have clear cluster division. In PC3, the cluster in the positive direction are consumers of `clothing`, `software`, `cosmetics`, `toys and games`, while clusters in the negative direction are consumers of `home and kitchen`, `CDs and vinyls`, `digital music`, `pet and supplies`. On this dimension, it is difficult to tell what are the socials roles that result in the division in this component. PC4 is might be slightly clearer to explain. The two clusters, consumers of `video games`, `musical instrument`, `electronics`, `clothing`, and consumers of `grocery`, `pet supplies`, `crafts and sewings`, `automotivs, `tools and home improvement` can be articulated as a result of different aging group. Middle-age or older adults have a social expectation of being more economically capable, hence is able to afford automotives; they have the image of being more home-caring and maybe have children to keep, hence in their purchase records it is reasonable to see more of kids toys (crafts and sewing), tools, grocery and supplies. On the other hand, teenagers or young adults have the social role of being more creative and into trends, possibly more affected by consumerism, and possibly more educative on avarage due to increase of education coverage in recent century, hence explaining the purchase style of music products, games, clothing etc.  
+```{r echo=FALSE}
+ggbiplot(copurchase.pca,choices=c(3,4), alpha = 0, varname.adjust = 2, obs.scale = 2) + ggtitle("PCA of Amazon co-purchase pattern")+ theme_minimal()+theme(legend.position = "bottom")
+ggbiplot(copurchase.pca,choices=c(3,4), alpha = 1, varname.adjust = 2, obs.scale = 2) + ggtitle("PCA of Amazon co-purchase pattern")+ theme_minimal()+theme(legend.position = "bottom")+ geom_point(size = 0.0000001)
+```
+
+# Conclusion
+To conclude, after doing the PCA on the Amazon purchase dataset and look deep into the first 4 principle components that in total explains 55.4% of the variance in consumers' co-purchase pattern, there comes out several promising social roles that can possibly be the major causes of consumer's co-purchase patterns. The first one is gender social roles, which we drive form the first component. In the context of this division, men has a social role of being more interested in technology products, cars, sports, and taking charge of the maintenance and construction part of household in the family. Women social role is caring more of their appearance and are expected to be responsible of routine households such as cooking, babysitting, doing groceries. The second possible division I get from PC2 is social status or economics, with social role of middle/upper class spend more money on rather high-cost entertainment and middle/lower class spend most of their money on livelihood. No much induction can be done for the third component. The fourth component induces a potential division of different aging group. I argue that PC4 might come into being because the social roles of middle age or older takes more responsibility in home caring and is more economically capable, while teenagers and young consumers might have the social role of be more into consumerism and trends, hence spending more money on clothes, music, games, electronics.
+
+As a result of this project, it is safe to say that consumers' co-purchase patterns are clustered based on some social roles that decides by gender, class, status, age, etc. Analyzing those patterns can be a promising way for researchers to have a better understanding of social roles and social structures hidden beneath the surface. 
+ 
+# Limitation and Future Research
+One big flaw of this project that must be mentioned is that the original per category data has their data size varies greatly among categories. It is clear to see that some data in certain categories are weighted more during the PCA simply because its data size is way bigger than other categories. Future research should take measure to reduce this effect. And this can possibly enhance the proportion variance of major components.
+
+Another limitation to emphasize is all the results and conclusions from this project cannot be proven to have absolute causal relationship at this stage. It is only capable of serving an exploratory purpose to see some potential social roles that can possibly explain co-purchase behaviors of online shopping. 
+
+Moreover, the fact that the dataset is from e-commerce records has great limitation, in terms of some commodities with specific attributes such as high-price or difficult to ship, people might prefer to purchase in-store. The fact that online e-commerce records might have little data for a great number of categories for above mentioned reasons, and the fact that not all the population are comfortable enough with e-commerce, could possibly introduce some third factor get involved in the causality logic.
+
+Promising future research includes trying to acquire more information on consumers' identity for the dataset. With more information such as gender and ethnicity about consumer, cluster analysis can be done on the top of PCA, and we will be able to see clear what decides the principle components. That is, we can analyze with more certainty of what social roles decide the major division of consumer's online purchase behaviors, and get a better sense of the reflected social structure.
+
+# Reference
+MacKenzie, I., Meyer, C., & Noble, S. (2013, October 1). How retailers can keep up with consumers. McKinsey & Company. Retrieved December 22, 2021, from https://www.mckinsey.com/industries/retail/our-insights/how-retailers-can-keep-up-with-consumers  
+
+Ni, J. (n.d.). Amazon review data. GitHub. Retrieved December 22, 2021, from https://nijianmo.github.io/amazon/index.html#subsets  
+
+Jolliffe, I. T., & Cadima, J. (2016). Principal component analysis: a review and recent developments. Philosophical transactions. Series A, Mathematical, physical, and engineering sciences, 374(2065), 20150202. https://doi.org/10.1098/rsta.2015.0202\  
+
+Harrison, M. (2014, June 23). PCA and K-means Clustering of Delta Aircraft. R-Bloggers. Retrieved December 22, 2021, from https://www.r-bloggers.com/2014/06/pca-and-k-means-clustering-of-delta-aircraft/
+
+</div>
