@@ -1,9 +1,10 @@
 # amazon-copurchase
 
-Investigation of Co-purchase Pattern and Reflected Social Roles in Amazon Co-Purchase Network
-Final Project for SOCI 424
+Final Project for SOCI 424 at McGill University.  
 
-The project mainly uses R and R markdown for data analysis purpose. There are also Python script and Shell script for data preprocess purposes.
+Investigation of Co-purchase Pattern and Reflected Social Roles in Amazon Co-Purchase Network using PCA (Principle Component Analysis). The result of the investigations demonstrate that consumers’ co-purchase patterns are clustered based on some social roles decided by gender, class, status, age, etc.
+
+The project mainly uses R and R markdown for data analysis purpose. Data preprocess stage uses Python script and Shell script.  
 Data sourc: https://nijianmo.github.io/amazon/index.html#subsets
 
-[Final Report](http://htmlpreview.github.io/?https://github.com/EmmaWuxy/amazon-copurchase/blob/main/final_report.html)
+Please check [Final Report](http://htmlpreview.github.io/?https://github.com/EmmaWuxy/amazon-copurchase/blob/main/final_report.html) for more details.
